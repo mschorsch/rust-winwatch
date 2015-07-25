@@ -12,25 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//external crates
-extern crate winapi;
-extern crate libc;
+use types::{FileNotifyChange};
 
-// public modules
-pub mod watch;
-pub mod notify;
-pub mod errors;
-pub mod types;
-
-// private modules
-mod util;
-
-pub use self::types::{FileNotifyChange, FileAction};
-pub use self::watch::{WinWatch, FileNotifyInformation};
-
-// uses
-use std::path::Path;
-
-pub fn watch_changes(directory: &Path, notify_changes: Box<Vec<FileNotifyChange>>, watch_subdirs: bool, buffer_size: u32) -> WinWatch {
-    WinWatch::new(directory, notify_changes, watch_subdirs, buffer_size)
-}
