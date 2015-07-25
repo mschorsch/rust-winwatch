@@ -76,3 +76,19 @@ fn test_display_fileaction() {
 fn test_debug_fileaction() {
     assert_eq!(format!{"{:?}", FileAction::FileAdded}, "FileAdded");
 }
+
+#[derive(Debug,Clone)]
+pub enum NotifyStatus {
+    
+    Change,
+    Abandonned,
+    Timout,
+    Faild(String),
+}
+
+impl fmt::Display for NotifyStatus {
+    
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", *self)
+    }
+}

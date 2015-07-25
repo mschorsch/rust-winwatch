@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//external crates
-extern crate kernel32;
-
 use util;
 use errors;
 use types::{FileAction, FileNotifyChange};
@@ -23,10 +20,9 @@ use types::{FileAction, FileNotifyChange};
 use std::path::Path;
 use std::fmt;
 use std::ptr;
-use std::ops::Drop;
-use std::os::raw::{c_void};
 
-use ::libc::types::os::arch::extra::{DWORD, HANDLE};
+use ::libc::types::os::arch::extra::{DWORD, HANDLE, LPDWORD, BOOL};
+use ::libc::types::common::c95::{c_void};
 use ::winapi::minwinbase::{LPOVERLAPPED, LPOVERLAPPED_COMPLETION_ROUTINE};
 
 #[derive(Debug,Clone)]
@@ -83,19 +79,26 @@ impl WinWatch {
 
 }
 
+extern "system" {
+
+    fn ReadDirectoryChangesW(hDirectory: HANDLE, lpBuffer: *mut c_void, nBufferLength: DWORD, bWatchSubtree: BOOL,
+                             dwNotifyFilter: DWORD, lpBytesReturned: LPDWORD, lpOverlapped: LPOVERLAPPED,
+                             lpCompletionRoutine: LPOVERLAPPED_COMPLETION_ROUTINE) -> BOOL;
+}
+
 fn read_directory_changes(h_directory: HANDLE, result_vec: &mut [u16], buffer_size: DWORD,
                           dw_notify_filter: DWORD, watch_subdirs: bool) -> Result<Box<Vec<FileNotifyInformation>>, errors::Error> {
     //
     // prepare parameters
     let handle = h_directory as *mut c_void;
     let lp_buffer = result_vec.as_mut_ptr() as *mut c_void;
-    let n_buffer_length: DWORD = buffer_size * 2; //in bytes
+    let n_buffer_length: DWORD = buffer_size * 2; // in bytes
 
     let b_watch_subtree = util::from_bool(watch_subdirs);
     let mut lp_bytes_returned: DWORD = 0;
 
     //overlapped io + callback
-    let lp_overlapped: LPOVERLAPPED = ptr::null_mut();
+    let lp_overlapped: LPOVERLAPPED = ptr::null_mut(); // c_null
     let lp_completion_routine: LPOVERLAPPED_COMPLETION_ROUTINE = Option::None; /*unsafe {
         std::mem::transmute(ptr::null_mut::<LPOVERLAPPED_COMPLETION_ROUTINE>())
     };*/
@@ -103,14 +106,14 @@ fn read_directory_changes(h_directory: HANDLE, result_vec: &mut [u16], buffer_si
     //
     // watch
     let has_result: bool = util::to_bool(unsafe {
-        kernel32::ReadDirectoryChangesW(handle,
-                                        lp_buffer,
-                                        n_buffer_length, 
-                                        b_watch_subtree, 
-                                        dw_notify_filter, 
-                                        &mut lp_bytes_returned, 
-                                        lp_overlapped,
-                                        lp_completion_routine)
+        ReadDirectoryChangesW(handle,
+                              lp_buffer,
+                              n_buffer_length, 
+                              b_watch_subtree, 
+                              dw_notify_filter, 
+                              &mut lp_bytes_returned, 
+                              lp_overlapped,
+                              lp_completion_routine)
     });
 
     //

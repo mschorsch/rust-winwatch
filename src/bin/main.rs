@@ -12,17 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate rust_winwatch;
+extern crate winwatch;
 
-use rust_winwatch::*;
+use winwatch::*;
 
 use std::path::Path;
 use std::thread;
 use std::sync::mpsc;
 
-fn main() {
-    let rx = thread_watch("d:/x".to_string());
+const DIRECTORY: &'static str = "d:/x";
 
+fn main() {
+    //Notify
+    test_winnotify();
+
+    // Watch
+    let rx = test_winwatch(DIRECTORY.to_string());
     for r in rx {
         println!("{:?}", r);
     }
@@ -37,7 +42,16 @@ fn main() {
     // }
 }
 
-fn thread_watch(directory: String) -> mpsc::Receiver<FileNotifyInformation> {
+fn test_winnotify() {
+    let notifier = notify_changes(Path::new(DIRECTORY), Box::new(vec![FileNotifyChange::FileName]), true);
+
+    for _ in 0..2 {
+        let status = notifier.notify();
+        println!("{:?}", status);        
+    }
+}
+
+fn test_winwatch(directory: String) -> mpsc::Receiver<FileNotifyInformation> {
     let (tx, rx) = mpsc::channel();
     
     thread::spawn(move || {

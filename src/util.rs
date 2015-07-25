@@ -13,7 +13,6 @@
 // limitations under the License.
 
 //uses
-use ::libc::{CreateFileW, CloseHandle, GetLastError};
 use ::libc::types::os::arch::extra::{DWORD, WCHAR, LPCWSTR, BOOL, HANDLE, SECURITY_ATTRIBUTES};
 use ::libc::consts::os::extra as winconsts;
 
@@ -62,6 +61,17 @@ pub fn to_u32le(v: &[u16], offset: usize) -> u32 {
     (v[offset + 1] as u32) << 16 | (v[offset] as u32) // little endian
 }
 
+extern "system" {
+
+    fn CreateFileW(lpFileName: LPCWSTR, dwDesiredAccess: DWORD, dwShareMode: DWORD,
+                   lpSecurityAttributes: *mut SECURITY_ATTRIBUTES, dwCreationDisposition: DWORD,
+                   dwFlagsAndAttributes: DWORD, hTemplateFile: HANDLE) -> HANDLE;    
+
+    fn CloseHandle(hObject: HANDLE) -> BOOL;
+
+    fn GetLastError() -> DWORD;
+}
+
 pub fn open_winhandle(directory: &Path) -> HANDLE {
     let lp_filename = to_lpcwstr(directory);
     let dw_desired_access = winnt::FILE_LIST_DIRECTORY;
@@ -79,10 +89,13 @@ pub fn open_winhandle(directory: &Path) -> HANDLE {
 }
 
 pub fn close_winhandle(handle: HANDLE) -> bool {
-    let result = unsafe { CloseHandle(handle) };
-    to_bool(result)
+    to_bool(unsafe {
+        CloseHandle(handle)
+    })
 }
 
 pub fn get_last_error() -> DWORD {
-    unsafe {GetLastError()}
+    unsafe {
+        GetLastError()
+    }
 }

@@ -25,12 +25,18 @@ pub mod types;
 // private modules
 mod util;
 
-pub use self::types::{FileNotifyChange, FileAction};
+// reexports
+pub use self::types::{FileNotifyChange, FileAction, NotifyStatus};
 pub use self::watch::{WinWatch, FileNotifyInformation};
+pub use self::notify::{WinNotify};
 
 // uses
 use std::path::Path;
 
 pub fn watch_changes(directory: &Path, notify_changes: Box<Vec<FileNotifyChange>>, watch_subdirs: bool, buffer_size: u32) -> WinWatch {
     WinWatch::new(directory, notify_changes, watch_subdirs, buffer_size)
+}
+
+pub fn notify_changes(directory: &Path, filters: Box<Vec<FileNotifyChange>>, watch_subtree: bool) -> WinNotify {
+    WinNotify::new(directory, filters, watch_subtree)
 }
