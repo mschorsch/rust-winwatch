@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use util;
-use errors;
+// import modules
+use ffi::*;
 use types::{FileAction, FileNotifyChange};
+use errors;
 
-// uses
+use ::libc::{FILE_SHARE_WRITE, FILE_SHARE_READ, FILE_SHARE_DELETE, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS};
+
+// std uses
 use std::path::Path;
 use std::fmt;
 use std::ptr;
 
-use ::libc::types::os::arch::extra::{DWORD, HANDLE, LPDWORD, BOOL};
-use ::libc::types::common::c95::{c_void};
-use ::winapi::minwinbase::{LPOVERLAPPED, LPOVERLAPPED_COMPLETION_ROUTINE};
+// consts
+const FILE_LIST_DIRECTORY: DWORD = 0x0001;
 
 #[derive(Debug,Clone)]
 pub struct FileNotifyInformation {
@@ -52,14 +54,14 @@ pub struct WinWatch {
 impl Drop for WinWatch {
 
     fn drop(&mut self) {
-        util::close_winhandle(self.h_directory);
+        close_dir_handle(self.h_directory);
     }
 }
 
 impl WinWatch {
     
     pub fn new(directory: &Path, notify_changes: Box<Vec<FileNotifyChange>>, watch_subdirs: bool, buffer_size: u32) -> WinWatch {
-        let h_directory = util::open_winhandle(directory); //TODO: check errors
+        let h_directory = open_dir_handle(directory); //TODO: check errors
         
         let mut results_arr: Vec<u16> = Vec::with_capacity(buffer_size as usize);
         unsafe {results_arr.set_len(buffer_size as usize)};
@@ -76,14 +78,28 @@ impl WinWatch {
     pub fn watch(&mut self) -> Result<Box<Vec<FileNotifyInformation>>, errors::Error> {
         read_directory_changes(self.h_directory, &mut *self.results_arr, self.buffer_size, self.dw_notify_filter, self.watch_subdirs)
     }
-
 }
 
-extern "system" {
+fn open_dir_handle(directory: &Path) -> HANDLE {
+    let lp_filename = to_lpcwstr(directory);
+    let dw_desired_access = FILE_LIST_DIRECTORY;
+    let dw_share_mode = FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE;
+    let lp_security_attributes: *mut SECURITY_ATTRIBUTES = ptr::null_mut();
+    let dw_creation_disposition = OPEN_EXISTING;
+    let dw_flags_and_attributes = FILE_FLAG_BACKUP_SEMANTICS;
+    let h_template_file: HANDLE = ptr::null_mut();
 
-    fn ReadDirectoryChangesW(hDirectory: HANDLE, lpBuffer: *mut c_void, nBufferLength: DWORD, bWatchSubtree: BOOL,
-                             dwNotifyFilter: DWORD, lpBytesReturned: LPDWORD, lpOverlapped: LPOVERLAPPED,
-                             lpCompletionRoutine: LPOVERLAPPED_COMPLETION_ROUTINE) -> BOOL;
+    unsafe {
+        CreateFileW(lp_filename, dw_desired_access, 
+            dw_share_mode, lp_security_attributes, dw_creation_disposition, 
+            dw_flags_and_attributes, h_template_file)        
+    }
+}
+
+fn close_dir_handle(handle: HANDLE) -> bool {
+    to_bool(unsafe {
+        CloseHandle(handle)
+    })
 }
 
 fn read_directory_changes(h_directory: HANDLE, result_vec: &mut [u16], buffer_size: DWORD,
@@ -94,7 +110,7 @@ fn read_directory_changes(h_directory: HANDLE, result_vec: &mut [u16], buffer_si
     let lp_buffer = result_vec.as_mut_ptr() as *mut c_void;
     let n_buffer_length: DWORD = buffer_size * 2; // in bytes
 
-    let b_watch_subtree = util::from_bool(watch_subdirs);
+    let b_watch_subtree = from_bool(watch_subdirs);
     let mut lp_bytes_returned: DWORD = 0;
 
     //overlapped io + callback
@@ -105,7 +121,7 @@ fn read_directory_changes(h_directory: HANDLE, result_vec: &mut [u16], buffer_si
 
     //
     // watch
-    let has_result: bool = util::to_bool(unsafe {
+    let has_result: bool = to_bool(unsafe {
         ReadDirectoryChangesW(handle,
                               lp_buffer,
                               n_buffer_length, 
@@ -121,7 +137,7 @@ fn read_directory_changes(h_directory: HANDLE, result_vec: &mut [u16], buffer_si
     if has_result {
         Result::Ok(from_u16_slice(result_vec))
     } else {
-        let error_desc = format!("Failure detected with system error code {}", util::get_last_error());
+        let error_desc = format!("Failure detected with system error code {}", get_last_error());
         Result::Err(errors::Error::new(error_desc))
     }
 }
@@ -144,10 +160,10 @@ fn from_u16_slice(v: &[u16]) -> Box<Vec<FileNotifyInformation>> {
 }
 
 fn to_file_notify_information(v: &[u16], offset: usize) -> (u32, FileNotifyInformation) {
-    let next_entry_offset_in_u16 = util::to_u32le(v, offset) / 2;
-    let action = util::to_u32le(v, offset + 2);
-    let file_name_length_in_bytes = util::to_u32le(v, offset + 4) as usize;
-    let filename = util::to_filename(v, offset + 6, file_name_length_in_bytes);
+    let next_entry_offset_in_u16 = to_u32le(v, offset) / 2;
+    let action = to_u32le(v, offset + 2);
+    let file_name_length_in_bytes = to_u32le(v, offset + 4) as usize;
+    let filename = to_filename(v, offset + 6, file_name_length_in_bytes);
 
     let fni = FileNotifyInformation {
         action: FileAction::from_u32(action),
@@ -155,4 +171,13 @@ fn to_file_notify_information(v: &[u16], offset: usize) -> (u32, FileNotifyInfor
     };
 
     (next_entry_offset_in_u16, fni)
+}
+
+fn to_filename(v: &[u16], offset: usize, file_name_length_in_bytes: usize) -> String {
+    let result = &v[offset .. offset + (file_name_length_in_bytes / 2)];
+    String::from_utf16(result).unwrap()
+}
+
+fn to_u32le(v: &[u16], offset: usize) -> u32 {
+    (v[offset + 1] as u32) << 16 | (v[offset] as u32) // little endian
 }

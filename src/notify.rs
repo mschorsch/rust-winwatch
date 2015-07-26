@@ -15,26 +15,14 @@
 use std::path::Path;
 
 use types::{FileNotifyChange, NotifyStatus};
-use util;
+use ffi::*;
 
-use ::libc::types::os::arch::extra::{DWORD, HANDLE, BOOL, LPCWSTR};
-use ::libc::consts::os::extra::{WAIT_OBJECT_0, WAIT_ABANDONED, WAIT_TIMEOUT, WAIT_FAILED, INFINITE};
-
-extern "system" {
-
-    fn FindFirstChangeNotificationW(lpPathName: LPCWSTR, bWatchSubtree: BOOL, dwNotifyFilter: DWORD) -> HANDLE;
-
-    fn FindNextChangeNotification(hChangeHandle: HANDLE) -> BOOL;
-
-    fn FindCloseChangeNotification(hChangeHandle: HANDLE) -> BOOL;
-
-    fn WaitForSingleObject(hHandle: HANDLE, dwMilliseconds: DWORD) -> DWORD;
-}
+use ::libc::{WAIT_OBJECT_0, WAIT_ABANDONED, WAIT_TIMEOUT, WAIT_FAILED, INFINITE};
 
 fn find_first_change_notification(directory: &Path, watch_subtree: bool, filters: Box<Vec<FileNotifyChange>>) -> HANDLE {
-    let lp_path_name = util::to_lpcwstr(directory);
+    let lp_path_name = to_lpcwstr(directory);
     let dw_notify_filter = FileNotifyChange::as_u32(filters);
-    let b_watch_subtree = util::from_bool(watch_subtree);
+    let b_watch_subtree = from_bool(watch_subtree);
 
     unsafe {
         // TODO check INVALID_HANDLE_VALUE for error
@@ -43,13 +31,13 @@ fn find_first_change_notification(directory: &Path, watch_subtree: bool, filters
 }
 
 fn find_next_change_notification(handle: HANDLE) -> bool {
-    util::to_bool(unsafe {
+    to_bool(unsafe {
         FindNextChangeNotification(handle)
     })
 }
 
 fn find_close_change_notification(handle: HANDLE) -> bool {
-    util::to_bool(unsafe {
+    to_bool(unsafe {
         FindCloseChangeNotification(handle)
     })    
 }
@@ -97,7 +85,7 @@ impl WinNotify {
             },
             WAIT_ABANDONED => NotifyStatus::Abandonned,
             WAIT_TIMEOUT => NotifyStatus::Timout,
-            WAIT_FAILED => NotifyStatus::Faild(format!("Failure detected with system error code {}", util::get_last_error())),
+            WAIT_FAILED => NotifyStatus::Faild(format!("Failure detected with system error code {}", get_last_error())),
             _ => unreachable!()
         }
     }

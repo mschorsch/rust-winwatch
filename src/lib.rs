@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![cfg(windows)]
+
 //external crates
-extern crate winapi;
 extern crate libc;
 
 // public modules
@@ -23,7 +24,7 @@ pub mod errors;
 pub mod types;
 
 // private modules
-mod util;
+mod ffi;
 
 // reexports
 pub use self::types::{FileNotifyChange, FileAction, NotifyStatus};
