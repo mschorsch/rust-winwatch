@@ -6,3 +6,7 @@ authors = ["mschorsch <matthias.schorsch@gmx.de>"]
 [dependencies]
 libc = "0.1.8"
 # winapi = "0.2.1"
+
+[[bin]]
+name = "winwatcher"
+path = "bin/main.rs"

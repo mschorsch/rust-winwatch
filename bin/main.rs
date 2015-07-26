@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(dead_code)]
+
 extern crate winwatch;
 
 use winwatch::*;
@@ -32,7 +34,9 @@ fn main() {
         println!("{:?}", r);
     }
 
-    // let watcher = sync(Path::new("d://x"), Box::new(vec![FileNotifyChange::FileName]), true, 1024);
+    // let directory = Path::new("d://x");
+    // let filters = Box::new(vec![FileNotifyChange::FileName]);
+    // let mut watcher = watch_changes(directory, filters, true, 1024);
 
     // loop {
     //     let results = watcher.watch().unwrap();
