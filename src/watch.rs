@@ -23,6 +23,8 @@ use ::libc::{FILE_SHARE_WRITE, FILE_SHARE_READ, FILE_SHARE_DELETE, OPEN_EXISTING
 use std::path::Path;
 use std::fmt;
 use std::ptr;
+use std::mem;
+use std::slice;
 
 // consts
 const FILE_LIST_DIRECTORY: DWORD = 0x0001;
@@ -47,7 +49,7 @@ pub struct WinWatch {
     watch_subdirs: bool,
     buffer_size: u32,
 
-    results_arr: Box<Vec<u16>>,
+    result_buffer: Box<Vec<u8>>,
     dw_notify_filter: DWORD,
 }
 
@@ -62,21 +64,18 @@ impl WinWatch {
     
     pub fn new(directory: &Path, notify_changes: Box<Vec<FileNotifyChange>>, watch_subdirs: bool, buffer_size: u32) -> WinWatch {
         let h_directory = open_dir_handle(directory); //TODO: check errors
-        
-        let mut results_arr: Vec<u16> = Vec::with_capacity(buffer_size as usize);
-        unsafe {results_arr.set_len(buffer_size as usize)};
 
         WinWatch {
             h_directory: h_directory,
             watch_subdirs: watch_subdirs,
             buffer_size: buffer_size,
-            results_arr: Box::new(results_arr),
+            result_buffer: Box::new(vec![0u8; buffer_size as usize]),
             dw_notify_filter: FileNotifyChange::as_u32(notify_changes),
         }
     }
 
     pub fn watch(&mut self) -> Result<Box<Vec<FileNotifyInformation>>, errors::Error> {
-        read_directory_changes(self.h_directory, &mut *self.results_arr, self.buffer_size, self.dw_notify_filter, self.watch_subdirs)
+        read_directory_changes(self.h_directory, &mut *self.result_buffer, self.buffer_size, self.dw_notify_filter, self.watch_subdirs)
     }
 }
 
@@ -102,13 +101,13 @@ fn close_dir_handle(handle: HANDLE) -> bool {
     })
 }
 
-fn read_directory_changes(h_directory: HANDLE, result_vec: &mut [u16], buffer_size: DWORD,
+fn read_directory_changes(h_directory: HANDLE, result_buffer: &mut [u8], buffer_size: DWORD,
                           dw_notify_filter: DWORD, watch_subdirs: bool) -> Result<Box<Vec<FileNotifyInformation>>, errors::Error> {
     //
     // prepare parameters
     let handle = h_directory as *mut c_void;
-    let lp_buffer = result_vec.as_mut_ptr() as *mut c_void;
-    let n_buffer_length: DWORD = buffer_size * 2; // in bytes
+    let lp_buffer = result_buffer.as_mut_ptr() as *mut c_void;
+    let n_buffer_length: DWORD = buffer_size; // in bytes
 
     let b_watch_subtree = from_bool(watch_subdirs);
     let mut lp_bytes_returned: DWORD = 0;
@@ -135,19 +134,19 @@ fn read_directory_changes(h_directory: HANDLE, result_vec: &mut [u16], buffer_si
     //
     // results
     if has_result {
-        Result::Ok(from_u16_slice(result_vec))
+        Result::Ok(from_u16_slice(result_buffer))
     } else {
         let error_desc = format!("Failure detected with system error code {}", get_last_error());
         Result::Err(errors::Error::new(error_desc))
     }
 }
 
-fn from_u16_slice(v: &[u16]) -> Box<Vec<FileNotifyInformation>> {
+fn from_u16_slice(v: &[u8]) -> Box<Vec<FileNotifyInformation>> {
     let mut result:Vec<FileNotifyInformation> = Vec::new();
     let mut offset: usize = 0;
     loop {
-        let (next_entry_offset, fni) = to_file_notify_information(v, offset);
-        result.push(fni);
+        let next_entry_offset = as_u32le(v, offset);
+        result.push(to_file_notify_information(v, offset));
 
         // check for 0.
         // 0 indicates that this is the last record
@@ -159,25 +158,34 @@ fn from_u16_slice(v: &[u16]) -> Box<Vec<FileNotifyInformation>> {
     Box::new(result)
 }
 
-fn to_file_notify_information(v: &[u16], offset: usize) -> (u32, FileNotifyInformation) {
-    let next_entry_offset_in_u16 = to_u32le(v, offset) / 2;
-    let action = to_u32le(v, offset + 2);
-    let file_name_length_in_bytes = to_u32le(v, offset + 4) as usize;
-    let filename = to_filename(v, offset + 6, file_name_length_in_bytes);
+fn to_file_notify_information(v: &[u8], offset: usize) -> FileNotifyInformation {
+    let action = as_u32le(v, offset + 4);
+    let file_name_length = as_u32le(v, offset + 8) as usize;
+    let filename = to_filename(v, offset + 12, file_name_length);
 
     let fni = FileNotifyInformation {
         action: FileAction::from_u32(action),
         filename: filename,
     };
 
-    (next_entry_offset_in_u16, fni)
+    fni
 }
 
-fn to_filename(v: &[u16], offset: usize, file_name_length_in_bytes: usize) -> String {
-    let result = &v[offset .. offset + (file_name_length_in_bytes / 2)];
-    String::from_utf16(result).unwrap()
+fn to_filename(v: &[u8], offset: usize, file_name_length: usize) -> String {
+    let result = &v[offset .. offset + file_name_length];
+    String::from_utf16(as_u16_slice(result)).unwrap()
 }
 
-fn to_u32le(v: &[u16], offset: usize) -> u32 {
-    (v[offset + 1] as u32) << 16 | (v[offset] as u32) // little endian
+fn as_u16_slice(v: &[u8]) -> &[u16] {
+    unsafe {
+        slice::from_raw_parts(v.as_ptr() as *const u16, v.len() / mem::size_of::<u16>())
+    }
+}
+
+fn as_u32le(v: &[u8], offset: usize) -> u32 {
+     // little endian
+    (v[offset + 3] as u32) << 24
+        | (v[offset + 2] as u32) << 16
+        | (v[offset + 1] as u32) << 8
+        | (v[offset] as u32)
 }
