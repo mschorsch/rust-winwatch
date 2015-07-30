@@ -14,36 +14,49 @@
 
 use std::error;
 use std::fmt;
-use std::convert::Into;
-
-//
-// Errors
-//
 
 #[derive(Debug)]
 pub struct Error {
-    description: String,
+    repr: ErrorRepr,
+}
+
+#[derive(Debug)]
+pub enum ErrorRepr {
+    WithDescription(ErrorKind, String), //TODO additional
+}
+
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+pub enum ErrorKind {
+    Unknown, //TODO addtional kinds
 }
 
 impl fmt::Display for Error {
 
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.description)
+        write!(f, "{}", self)
     }
 }
 
 impl error::Error for Error {
 
-    fn description(&self) -> &str {
-        &self.description
+    fn description(& self) -> & str {
+        match self.repr {
+            ErrorRepr::WithDescription(_, ref description) => description,
+        }
     }
 }
 
 impl Error {
     
-    pub fn new<S>(description: S) -> Error where S: Into<String> {
+    pub fn new(repr: ErrorRepr) -> Error {
         Error {
-            description: description.into(),
+            repr: repr,
         }
     }
+
+    pub fn new_with_description(kind: ErrorKind, description: String) -> Error {
+        Error {
+            repr: ErrorRepr::WithDescription(kind, description),
+        }
+    }    
 }

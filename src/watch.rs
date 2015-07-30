@@ -148,7 +148,7 @@ fn read_directory_changes(h_directory: HANDLE, result_buffer: &mut [u8], buffer_
         Result::Ok(from_u16_slice(result_buffer))
     } else {
         let error_desc = format!("Failure detected with system error code {}", get_last_error());
-        Result::Err(errors::Error::new(error_desc))
+        Result::Err(errors::Error::new_with_description(errors::ErrorKind::Unknown, error_desc))
     }
 }
 
