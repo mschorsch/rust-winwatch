@@ -71,7 +71,7 @@ impl WinNotify {
         }
     }
 
-    pub fn notify(&self) -> NotifyStatus {
+    pub fn notify(&self) -> NotifyStatus { // TODO wrap in error
         let dw_wait_status = wait_for_single_object(self.handle);
 
         match dw_wait_status {

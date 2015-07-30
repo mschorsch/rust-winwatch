@@ -26,7 +26,7 @@ const DIRECTORY: &'static str = "d:/x";
 
 fn main() {
     //Notify
-    test_winnotify();
+    // test_winnotify();
 
     // Watch
     let rx = test_winwatch(DIRECTORY.to_string());
@@ -47,7 +47,7 @@ fn main() {
 }
 
 fn test_winnotify() {
-    let notifier = notify_changes(Path::new(DIRECTORY), Box::new(vec![FileNotifyChange::FileName]), true);
+    let notifier = new_change_notifier(Path::new(DIRECTORY), Box::new(vec![FileNotifyChange::FileName]), true);
 
     for _ in 0..2 {
         let status = notifier.notify();
@@ -59,7 +59,7 @@ fn test_winwatch(directory: String) -> mpsc::Receiver<FileNotifyInformation> {
     let (tx, rx) = mpsc::channel();
     
     thread::spawn(move || {
-        let mut watcher = watch_changes(Path::new(&directory), Box::new(vec![FileNotifyChange::FileName]), true, 1024);
+        let mut watcher = new_change_watcher(Path::new(&directory), Box::new(vec![FileNotifyChange::FileName]), true, 1024);
         loop {
             let results = watcher.watch().unwrap();
             for r in *results {

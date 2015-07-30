@@ -42,6 +42,17 @@ impl fmt::Display for FileNotifyInformation {
     }
 }
 
+impl FileNotifyInformation {
+
+    pub fn get_action(&self) -> FileAction {
+       self.action
+    }
+    
+    pub fn get_filename(&self) -> &str {
+       &self.filename
+    }
+}
+
 #[derive(Debug)]
 pub struct WinWatch {
 
